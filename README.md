@@ -10,12 +10,12 @@ The original article that has been reproduced can be found here: [Bias behind Ba
 
 Outputs contain data that has been modified from the input data, the report and supporting material.
 
-paper.rmd
+- paper.rmd
 
-paper.pdf
+- paper.pdf
 
 Scripts contain R scripts that take inputs and outputs and produce outputs. These are:
 
-data_cleaning.R code to clean the CSC data set
+- data_cleaning.R code to clean the CSC data set
 
-appendix.rmd code for the entire paper
+- appendix.rmd code for the entire paper
