@@ -4,9 +4,9 @@ This repository contains code and the report for the statistical study undertake
 
 Inputs contain data that are unchanged from their original and was used by Tom Cardoso while coducting his analysis and article. We use one data set: The data set used in our report fall under copyright laws and thus we cannot include the direct data files.
 
-Globe and Mail data: To obtain the observational data for this study, please click on the following link: [Link to observational data](https://www.theglobeandmail.com/files/editorial/News/nw-na-risk-1023/The_Globe_and_Mail_CSC_OMS_2012-2018_20201022235635.zip)
+Globe and Mail data: To obtain the observational data for this study, please click on the following [link](https://www.theglobeandmail.com/files/editorial/News/nw-na-risk-1023/The_Globe_and_Mail_CSC_OMS_2012-2018_20201022235635.zip).
  
-The original article that has been reproduced can be found here: [Bias behind Bars](https://www.theglobeandmail.com/canada/article-investigation-racial-bias-in canadian-prison-risk-assessments/)
+The original article that has been reproduced can be found here: [Bias behind Bars by Tom Cardoso](https://www.theglobeandmail.com/canada/article-investigation-racial-bias-in-canadian-prison-risk-assessments/).
 
 Outputs contain data that has been modified from the input data, the report and supporting material.
 
