@@ -10,9 +10,9 @@ The original article that has been reproduced can be found here: [Bias behind Ba
 
 Outputs contain data that has been modified from the input data, the report and supporting material.
 
-- paper.rmd
+- Paper.rmd
 
-- paper.pdf
+- Paper.pdf
 
 Scripts contain R scripts that take inputs and outputs and produce outputs. These are:
 

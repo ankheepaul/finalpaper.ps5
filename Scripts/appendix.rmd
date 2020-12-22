@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r setup, include=FALSE,echo = FALSE}
 
-#basic workspace setup
+#Basic workspace setup
 
 library(broom)
 library(jtools)
@@ -26,15 +26,12 @@ library(haven)
 ```
 
 ##1.Data Cleaning
-```{r, include =FALSE, Echo= FALSE}
-#set working directory
-setwd("~/Desktop/ps5/The_Globe_and_Mail_CSC_OMS_2012-2018_20201022235635")
 
-```
 
 ```{r}
 
-#read the data set and store it in the variable raw_data
+#Set working directory
+#Read the data set and store it in the variable raw_data
 raw_data<-read.csv("The_Globe_and_Mail_CSC_OMS_2012-2018_20201022235635.csv",na.strings=c(""))
 
 
@@ -363,7 +360,7 @@ testing.m0<- clean_data_m[ -Train.m0, ]
 
 ```{r}
 
-# Logistic regression  model for Offender Security Level for Male inmates.
+# Logistic regression  model for Offender Security Level - Male 
 m0.m <- multinom(as.numeric(OFFENDER.SECURITY.LEVEL=="MAXIMUM")~RACE+RACE.GROUPING,
                  family=binomial(link='logit'),
                  data=training.m0)
@@ -375,7 +372,7 @@ m0.m <- multinom(as.numeric(OFFENDER.SECURITY.LEVEL=="MAXIMUM")~RACE+RACE.GROUPI
 
 
 ```{r}
-## Logistic Regression for Security Level for Female Prisoners
+## Logistic Regression for Offender Security Level for Female Prisoners
 
 
 #Create a subset of the data by selecting only female prisoners and remove missing values.
@@ -395,19 +392,19 @@ testing.f0<- clean_data_f[ -Train.f0, ]
 
 ```{r}
 
-# Logistic regression for Offender security level
+# Logistic regression for Offender security level - Female
 f0.f <- multinom(as.numeric(OFFENDER.SECURITY.LEVEL=="MAXIMUM")~RACE+RACE.GROUPING,
                  family=binomial(link='logit'),
                  data=training.f0)
 
 ```
 
-##3.1.2 Logistic Regression for Reintegration score 
+##3.1.2 Logistic Regression for Reintegration Potential score 
 
 
 ```{r}
 
-## Logistic Regression Model Reingration Score  for Male inmates.
+## Logistic Regression Model Reingration Potential Score for Male inmates in custody.
 
 #Creating subset of the data by selecting only male prisoners in custody and
 # removing missing values.
@@ -429,7 +426,7 @@ testing.m1<- clean_data_mc[ -Train.m1, ]
 
 
 ```{r}
-# Logistic regression model for reintegration score
+# Logistic regression model for Reintegration potential score -Male inmates
 m1.m <- multinom(as.numeric(REINTEGRATION.POTENTIAL=="LOW")~RACE+RACE.GROUPING,
                  family=binomial(link='logit'),
                  data=training.m1)
@@ -461,7 +458,7 @@ testing.f1<- clean_data_fc[ -Train.f1, ]
 
 
 ```{r}
-# Logistic regression for reintegration score
+# Logistic regression for Reintegration potential score - Female inmates
 f1.f <- multinom(as.numeric(REINTEGRATION.POTENTIAL=="LOW")~RACE+RACE.GROUPING,
                  family=binomial(link='logit'),
                  data=training.f1)
