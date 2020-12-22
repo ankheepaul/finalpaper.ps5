@@ -1,0 +1,794 @@
+---
+title: "Reproduction of Bias Behind Bars"
+author: "Ankhee Paul"
+date: "22 December 2020."
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+abstract: "On October 24th, 2020, The Globe and Mail Canada launched ‘Bias behind Bars’ by their crime justice reporter Tom Cardoso who investigates the systematic bias in the justice system against Black and indigenous people while establishing their risk assessment scores. In this paper, we aim to reproduce Tom Cardoso’s article. We use a multinomial logistic regression model to determine the impact of racial background on the two most important risk assessment scores of male and female inmates. Our results show that black inmates have a higher likelihood of receiving the worst offender security level compared to white prisoners whereas black and indigenous male prisoners have a higher probability of receiving the worst reintegration potential score compared to other male prisoners of other racial backgrounds."
+---
+```{r,include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+```{r, include =FALSE,message=FALSE,warning=FALSE}
+#basic workspace setup
+#download the following packages
+
+library(kableExtra)
+library(caret)
+library(tidyverse)
+library(haven)
+library(broom)
+library(jtools)
+library(nnet)
+library(ggstance)
+```
+
+# Introduction
+
+ On October 24, 2020, the Globe and Mail Canada launched "Bias behind bars"; a two-year inquiry by The Globe’s crime and justice reporter, Tom Cardoso, that uncovered systemic bias in the Canadian judicial prison system. By 26th October 2020, the investigation gathered unanimous support of Members of Parliament, calling for an independent study on systemic discrimination in federal prisons, including inmate risk assessments. In the article published, Cardoso explores the risk assessment received by federal inmates and uses logistic regression to determine how race affects the scores received by the prisoners.
+
+ When an individual enters the Correctional System, they immediately a series of psychological evaluations, cognitive tests and questionnaires, based on which a risk assessment report is prepared. This initial report, handed to correctional officers, create an impression on the officer and further determines their future in the correction system. Length and type of their sentence, their access to rehabilitative and treatment programs, the security level of the facility they would be placed in as well as potential parole- all depend on a person’s risk assessment. It is basically the score that determines how much threat an individual poses to society. Cardoso, through his analysis, discovered that black and indigenous people have are likely to receive worse risk assessment score on average implying a bias in the correctional system.
+
+ In this paper, we attempt to reproduce Cardoso’s work to the best of our ability. In order to do so, we use the data set provided to us by the Globe and Mail that was originally used by Cardoso. We use a multinomial logistic regression model to determine the impact of racial background on the two most important risk assessment score, namely, Offender Security level and the reintegration potential score. Our results yield significant in determining that black inmates have a higher probability of receiving the worst offender security level compared to white prisoners whereas black and indigenous male prisoners have a higher probability of receiving the worst reintegration potential score compared to other male prisoners of other racial backgrounds.
+
+ In Section 2, we represent the datas et and plot various variables in it. We also describe modifications made to the data set to allow us to run our regression models. Section 3 highlights the logistic regression models and establishes the validity of the models. Section 4 displays the results yielded from our models. Finally, Section 5 concludes with a discussion of our models and the yielded results as well as their implications and weaknesses.At the end of this paper we have added an appendix which includes a link to where the code used for this study lives.
+
+# 2.Data 
+
+# 2.1. Data Information
+
+```{r}
+#set working directory
+
+#read the data set and store it in the variable raw_data
+raw_data<-read.csv("The_Globe_and_Mail_CSC_OMS_2012-2018_20201022235635.csv",na.strings=c(""))
+
+```
+
+```{r, include =FALSE,message=FALSE,warning=FALSE}
+#selecting the variables of interest.
+select_data <- 
+  raw_data%>%
+  select(FISCAL.YEAR,
+         AGE,
+         GENDER,
+         RACE,
+         RACE.GROUPING,
+         IN.CUSTODY.COMMUNITY,
+         SUPERVISION.TYPE,
+         JURISDICTION,
+         SENTENCE.TYPE,
+         AGGREGATE.SENTENCE.LENGTH,
+         INSTUTUTIONAL.SECURITY.LEVEL,
+         OFFENDER.SECURITY.LEVEL,
+         STATIC.RISK,
+         REINTEGRATION.POTENTIAL,
+         RELIGION,
+         OFFENCE.DESCRIPTION,
+         OFFENDER.NUMBER)
+
+clean_data<-select_data %>% na.omit()
+
+clean_data<-
+  select_data%>%
+  #filtering out individuals who went to federal prison.
+  filter(JURISDICTION %in% c("FEDERAL"))%>%
+  na.omit()
+
+#removing missing values
+clean_data <-
+#grouping all races other than Black, White , with  Non-Indigenous race grouping into "Other" and grouping all races other than Black, White, with Indigenous race grouping into "Indigenous.
+  select_data %>%
+  mutate(RACE= case_when(RACE == "Black" ~ "Black",
+                         RACE == "White" ~ "White",
+                         RACE != "Black" || RACE != "White" ~"Other"))%>%
+                         #merging rows together based on OFFENDER NUMBER to group multiple entries for the same individual.
+            group_by(OFFENDER.NUMBER)%>%
+            na.omit()
+          
+  
+  
+                   
+```
+
+ This paper works with the data used by Cardoso in the original paper. In late 2018, when the Globe and Mail decided to undertake this investigation, they reached out to the Correctional Services of Canada and filed a freedom of information request with them. The agency released data with around 744,958 rows and 25 columns, with details of around 50,116 people in custody or supervised release.
+
+ When an individual receives a sentence of two years or longer, the CSC enters their details as a new inmate to their records database. The database logs all information about the inmates: their age, gender, religion, psychological evaluations, risk assessment scores, correctional plans, progress reports, parole recommendations and more. This dataset contains data from 2012 to 2018, with a snapshot of the database captured on March 31st, the last day of the CSC’s fiscal year.
+
+ When an individual enters the correctional system, they are immediately evaluated with the predominant motivation of ascertaining how much of a risk would the individual pose to the society. A preliminary assessment report, handed to the parole officer, has great importance in feeding into future assessments and decisions – access to rehabilitative programs, frequency of meetings with parole officers, the security level of the facility assigned, determination of solitary confinement and most crucially, chances of getting parole. In order to determine that, a series of cognitive tests, questionnaires, as well as the professional judgement of correctional officers, are taken into consideration. This ends up with a tally of their risk assessment scores. The data contains five different types of risk assessments along with age, gender, religion, race, details of the length of a prisoner’s sentence, whether they are in a minimum-medium or maximum facility or whether they are on parole. It also displays “Offender number” which is a unique id provided to each individual. “Offence ID” represents a unique offence, “Warrant ID” represents a unique warrant of committal issued by a judge and “Sentence ID” is a unique identifier for each inmate’s sentence. A prisoner may have multiple offence ids, warrant ids and sentence ids.
+
+ The most important scores that are pertinent in our study is the “Offender Security Level” and the “REINTE- GRATION  POTENTIAL”.  The “OFFENDER SECURITY LEVEL” is an ordinal categorical variable, that is, it is qualitative following a certain order of “Maximum”, “Medium” and “Minimum”. It describes the security level designated to each inmate upon their arrival as a measure of the security risk they pose and impacts their access to treatment programs as well as determines the security level of the facility they would be assigned to. The “REINTEGRATION SCORE” is a score with levels “LOW’, “MEDIUM” and “HIGH” which basically evaluates the potential of reformation of an inmate. This score is used to estimate whether an inmate is eligible to re-enter society and how much of a security risk they pose if the former were to occur. The variable “STATIC RISK” is a proxy for criminal record. It is a CSC tool determined by Statics Factor Assessment that measures a person’s past involvement with the justice system. If a person has “HIGH” static risk, it implies that the person had significant involvement in the past with the justice system.
+
+ In order to clean the data, we first filter out people under provincial jurisdiction that leaves us with 741,738 rows and 49,165 unique individuals. We then remove missing values and categorize the race of an individual under “Black”, “White” and “Other”, with “Other” comprising of all other racial backgrounds such as South-East Asian, North American, etc. As Race is self-reported by an individual upon entering the system and can change over time, Cardoso considered the race that an individual provided upon their first entry. Moreover, we select variables such as age, gender, religion, length and type of sentence received by an inmate as well as the two most important risk assessment scores “REINTEGRATION POTENTIAL” and “OFFENDER SECURITY LEVEL”.
+
+ In his methodology, Cardoso simplified people’s charges that are described in text form. In order to determine the severity of offence, Cardoso hand-matched more than seven hundred charges to Uniform Crime Reporting Survey offence categories which he then cross-referred with Statistics Canada’s crime severity index weights – a system where seriousness and severity of crime is measure by assigning numerical weights to the crimes. For example, a weight of 7656.16 is assigned for a charge of first-degree murder. The weights increase with severity of the crime and to find an inmate’s most serious offence, Cardoso picked the largest weight for an inmate’s sentence in a given year. Since we were unable to find Statistics Canada’s crime severity index weights, we were unable to determine the most serious offence committed by an individual. This left an individual with multiple charges occupying multiple entries in the data set. Hence, we grouped together by an individual’s “Offence Number” which is unique to each inmate.
+
+ After cleaning up our data, we plotted it using bar plots and histograms in ggplot.
+
+
+##2.2 Display of Data
+```{r, echo= FALSE,message=FALSE,warning=FALSE}
+# A bar plot displaying the prisoners by their gender
+clean_data %>% 
+  ggplot(aes(x = GENDER)) + 
+  geom_bar(colour="black", fill = 'blue') + 
+  labs(title = "Graph 1: Gender Distribution of Prisoners", 
+       x = "Gender",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+```
+
+ Graph 1 shows us the gender distribution of the inmates. The distribution is overwhelmingly male implying a higher number of male prisoners than female prisoners.
+
+
+
+```{r, echo= FALSE,message=FALSE,warning=FALSE}
+# A histogram displaying the age distribution of the prisoners
+clean_data %>% 
+  ggplot(aes(x = AGE)) + 
+  geom_bar(colour="black", fill = 'green') + 
+  labs(title = "Graph 2: Age Distribution of Prisoners", 
+       x = "Age of Prisoners",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+
+```
+
+ Graph 2 plots the age distribution of the prisoners in a bar plot. The plot shows that a higher number of prisoners are between the ages of 25 years to 50 years with the mean age being around 40 years. This shows that the prisoner demographic comprises of the younger to middle-aged generations. The histogram is right-skewed or positively skewed implying that the mean and median ages are greater than the mode of the distribution. There is, however, a sudden peak at 52 years implying a high number of prisoners in that age category.
+
+
+```{r, echo= FALSE,message=FALSE,warning=FALSE}
+# A bar plot displaying the races of the prisoners
+clean_data %>% 
+  ggplot(aes(x = RACE, fill = RACE.GROUPING,
+             label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") + 
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3)+
+ 
+  labs(title = "Graph 3: Race Distribution of Prisoners", 
+       x = "Race of the prisoners",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+
+```
+
+ Graph 3 displays the racial distribution of the inmates as per their racial grouping, that is, whether they identify as “Indigenous” or “Non-Indigenous”. Although we see a higher number of white individuals than other races, this is due to the population distribution in the country.  In his article, Cardoso mentions that given the representation of different races in the Canadian population in general, Black people and Indigenous people are over-represented. Using Cardoso’s census figures mentioned in the article, Black people and Indigenous people represented 3.5% and 4.8% of the population respectively in 2016. Graph 3 shows that Black people and Indigenous people represent 6.89% and 20.61% of the prison population respectively implying a over-representation as mentioned by Cardoso.
+
+```{r, echo= FALSE,message=FALSE,warning=FALSE}
+clean_data %>% 
+  ggplot(aes(x = IN.CUSTODY.COMMUNITY, fill=RACE,
+         label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) + 
+  labs(title = "Graph 4: Distribution of Prisoners based on whether they are in custody", 
+       x = "IN CUSTODY/ COMMUNITY",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+
+```
+
+
+```{r, echo= FALSE,message=FALSE,warning=FALSE}
+clean_data %>% 
+  ggplot(aes(x = IN.CUSTODY.COMMUNITY, fill=RACE.GROUPING,
+         label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) + 
+  labs(title = "Graph 5:Distribution of Prisoners based on whether they are in custody", 
+       x = "IN CUSTODY/ COMMUNITY",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+```
+
+ Graphs 4 and 5 show the distribution of prisoners based on whether they are in custody or on parole. As can be seen the ratio between inmates in custody versus on parole for white people is almost 1:2 whereas the ratio for Black as well as Indigenous people is almost 1:3, suggesting that a lower proportion of black and indigenous prisoners are considered for parole.
+ 
+ 
+```{r, echo= FALSE,message=FALSE,warning=FALSE}
+clean_data %>% 
+  ggplot(aes(x = SENTENCE.TYPE, fill=RACE,
+         label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) + 
+  labs(title = "Graph 6: Distribution of Prisoners by Sentence Type", 
+       x = "Type of Sentence",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+```
+
+```{r, include =TRUE, echo= FALSE}
+clean_data %>% 
+  ggplot(aes(x = SENTENCE.TYPE, fill=RACE.GROUPING,
+         label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) + 
+  labs(title = "Graph 7: Distribution of Prisoners by Sentence Type", 
+       x = "Type of Sentence",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+
+```
+
+ Graphs 6 and 7 show the distribution of prisoners based on their sentence type, whether it’s a determinate sentence with a fixed number of years or life imprisonment, in which case, the sentence type would be “INDETERMINATE”. In Graph 6, the ratio between “DETERMINATE” versus “INDETERMINATE” is  6:1 for black people compared to roughly a ratio of 5:1 for white people. However, for indigenous people, the ratio is almost 5:1 which is roughly the same as one for white people. Considering that the indigenous community is over-represented among the prisoners and under-represented in the population compared to white people, there is a significantly high rate of indigenous people receiving life sentences.
+
+
+
+
+
+```{r, echo= FALSE,message=FALSE,warning=FALSE}
+clean_data %>% 
+  ggplot(aes(x = OFFENDER.SECURITY.LEVEL, fill=RACE,
+         label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) + 
+  labs(title = "Graph 8: Distribution of Prisoners by Offender Security level", 
+       x = " Security level",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+```
+
+```{r, include =TRUE, echo= FALSE}
+clean_data %>% 
+  ggplot(aes(x = OFFENDER.SECURITY.LEVEL, fill=RACE.GROUPING,
+         label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) + 
+  labs(title = "Graph 9: Distribution of Prisoners by Offender Security level", 
+       x = " Security level",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+```
+
+ Graphs 8 and 9 show the distribution of prisoners based on their Offender security level score. We condition on the “MEDIUM” score, that is, the score received by a prisoner given the number of prisoners who have received a “MEDIUM” score (since that score has the highest recipients). It is immediately seen in graph 8 that Black people have a ratio of about 1:2 of receiving a “MAXIMUM” score compared to white people with a ratio of almost 1:4. Similarly conditioning on the “MEDIUM” score for Graph 9 that indigenous people have a ratio of approximately 1:3 of getting a “MAXIMUM” score. This implies that Black people get a worse score than indigenous people and white people.
+
+
+```{r, echo= FALSE,message=FALSE,warning=FALSE}
+clean_data %>% 
+  ggplot(aes(x = REINTEGRATION.POTENTIAL, fill=RACE,
+         label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) + 
+  labs(title = "Graph 10: Distribution of Prisoners by Reintegration potential", 
+       x = " Reintegration Potential",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+```
+
+```{r, echo= FALSE,message=FALSE,warning=FALSE}
+clean_data %>% 
+  ggplot(aes(x = REINTEGRATION.POTENTIAL, fill=RACE.GROUPING,
+         label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) + 
+  labs(title = "Graph 11: Distribution of Prisoners by Reintegration potential", 
+       x = " Reintegration Potential",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+```
+
+ Graphs 10 and 11 plot the distribution of prisoners based on their Reintegration potential score. Since “MEDIUM” score has the most recipients, we condition on it. It is observed in Graph 10 that Black people have a ratio of almost 1:0.75 of getting a “LOW” reintegration potential score compared to white people with a ratio of almost 1:0.95 of getting “LOW”. Similarly, in Graph 11 indigenous people have a ratio almost of 1.07:1 of getting a “LOW” score implying that indigenous people get a worse score than black people and white people.
+ 
+
+```{r, echo= FALSE,message=FALSE,warning=FALSE}
+clean_data %>% 
+  ggplot(aes(x = INSTUTUTIONAL.SECURITY.LEVEL, fill=RACE.GROUPING,
+         label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) + 
+  labs(title = "Graph 12: Distribution of Prisoners by Institutional Security level", 
+       x = " Security level",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+```
+
+```{r, echo= FALSE,message=FALSE,warning=FALSE}
+clean_data %>% 
+  ggplot(aes(x = INSTUTUTIONAL.SECURITY.LEVEL, fill=RACE,
+         label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) + 
+  labs(title = "Graph 13: Distribution of Prisoners by Institutional Security level", 
+       x = " Security level",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+```
+
+ Graph 12 and 13 plot the distribution of prisoners based on the security level of the facility they are placed at. Despite “MULTI-LEVEL” security having the highest recipients, we condition on "MEDIUM" security level. It is noticed that the ratio for Black people getting assigned to a “MAXIMUM” security facility is almost 1:1 compared to white people who have a ratio slightly greater than 1:2. For indigenous people, this ratio is almost 1:3 implying that black people get assigned to a "MAXIMUM" facility more often than indigenous people.
+
+
+#3. Model
+
+```{r}
+## 3.1 Regression Models
+
+##3.1.1. Logistic Regression for Offender Security level 
+
+## Logistic Regression Model for Male
+
+#Create a subset of the data by selecting only male prisoners and remove missing values.
+clean_data_m <- subset(clean_data, GENDER== "MALE") %>%na.omit()
+
+#Creating the Training and Testing data set
+set.seed(1111)
+Train.m0 <- createDataPartition(clean_data_m$OFFENDER.SECURITY.LEVEL,
+                                p=0.6, 
+                                list=FALSE)
+
+# Dividing the data into Train and Test data sets.
+training.m0<- clean_data_m[ Train.m0, ]
+testing.m0<- clean_data_m[ -Train.m0, ]
+```
+
+
+```{r}
+
+# Logistic regression  model for Offender Security Level - Male prisoners.
+m0.m <- multinom(as.numeric(OFFENDER.SECURITY.LEVEL=="MAXIMUM")~RACE+RACE.GROUPING,
+                 family=binomial(link='logit'),
+                 data=training.m0)
+
+```
+
+
+```{r}
+## Logistic Regression for Security Level for Female Prisoners
+
+
+#Create a subset of the data by selecting only female prisoners and remove missing values.
+clean_data_f <- subset(clean_data, GENDER== "FEMALE") %>%na.omit()
+
+#Creating the Training and Testing data set
+set.seed(2222)
+Train.f0<- createDataPartition(clean_data_f$OFFENDER.SECURITY.LEVEL, 
+                               p=0.6, 
+                               list=FALSE)
+
+#Dividing data into Train and Test data sets.
+training.f0<- clean_data_f[ Train.f0, ]
+testing.f0<- clean_data_f[ -Train.f0, ]
+```
+
+
+```{r}
+
+# Logistic regression for Offender security level - female prisoners
+f0.f <- multinom(as.numeric(OFFENDER.SECURITY.LEVEL=="MAXIMUM")~RACE+RACE.GROUPING,
+                 family=binomial(link='logit'),
+                 data=training.f0)
+
+```
+
+
+
+
+```{r}
+##3.1.2 Logistic Regression for Reintegration score 
+
+## Logistic Regression Model Reingration Score  for Male inmates.
+
+#Creating subset of the data by selecting only male prisoners in custody and
+# removing missing values.
+clean_data_mc<- subset(clean_data, GENDER== "MALE" & IN.CUSTODY.COMMUNITY== "In Custody") %>%
+  na.omit()
+
+#Creating the Training and Testing data set
+set.seed(3333)
+Train.m1 <- createDataPartition(clean_data_mc$REINTEGRATION.POTENTIAL,
+                                p=0.6, 
+                                list=FALSE)
+
+#Dividing the data into Train and Test data sets.
+training.m1<- clean_data_mc[ Train.m1, ]
+testing.m1<- clean_data_mc[ -Train.m1, ]
+
+```
+
+
+
+```{r}
+# Logistic regression model for Reintegration potential score - Male
+m1.m <- multinom(as.numeric(REINTEGRATION.POTENTIAL=="LOW")~RACE+RACE.GROUPING,
+                 family=binomial(link='logit'),
+                 data=training.m1)
+
+
+
+```
+
+
+
+```{r}
+## Logistic Regression Model for Reintegration Potential for Female Prisoners in Custody
+
+#Creating subset of the data by selecting only female prisoners in custody
+clean_data_fc<- subset(clean_data, GENDER== "FEMALE" & IN.CUSTODY.COMMUNITY== "In Custody") %>% na.omit()
+
+#Creating the Training and Testing data set
+set.seed(4444)
+Train.f1 <- createDataPartition(clean_data_fc$REINTEGRATION.POTENTIAL,
+                                p=0.6, 
+                                list=FALSE)
+
+#Divding data into Train and Test set
+training.f1<- clean_data_fc[ Train.f1, ]
+testing.f1<- clean_data_fc[ -Train.f1, ]
+
+```
+
+
+
+```{r}
+# Logistic regression for Reintegration score - Female
+f1.f <- multinom(as.numeric(REINTEGRATION.POTENTIAL=="LOW")~RACE+RACE.GROUPING,
+                 family=binomial(link='logit'),
+                 data=training.f1)
+
+
+
+```
+
+ In this study, we use a multinomial logistic regression model to determine whether the Race and Race grouping of individual inmates affect the Offender security level score and the Reintegration potential score. To accomplish these tasks, we will be using R to carry out our analysis. Multinomial Logistic Regression is used to classify subjects based on values of a set of predictor variables. This type of regression is similar to logistic regression, but it is more general because the dependent variable is not restricted to two categories, unlike generalized logistic regression.
+ 
+ Under generalized logistic regression, which is a type of generalized linear regression, the dependent variable is binary, meaning the outcome can take only two values. Unlike that, multinomial logistic regression generalizes logistic regression to multiclass problems, that is, with more than two possible discrete outcomes. Logistic Regression models are primarily used to predict the odds of an event occurring, given the inputs as predictor variables. Due to the logistic model’s link function logit, these odds are interpreted as the log-odds of seeing our event occur, expressed as the log ratio of the probability of success to the probability of failure. For example, we can determine which candidate wins an election using logistic regression given predictor variables like voter demographics (age, sex, religion, etc). We choose to use this model since, in both the models that we plan to analyze, the dependent/response variable has more than two outcomes. Both, “REINTEGRATION SCORE” and “OFFENDER SECURITY LEVEL", are ordinal categorical variables with three different levels.
+ 
+ Like  Cardoso, we create two models analyzing the impact of racial background on inmate’s two most important risk assessment score, namely “OFFENDER SECURITY LEVEL” and “REINTEGRATION SCORE”. Each of these two models is run twice, once for male inmates and once for female inmates. To analyze the impact of racial background on “OFFENDER SECURITY LEVEL”, we subset the data into male and female inmates and condition on the “MAXIMUM” score which is the worst score an inmate can receive with “RACE” and “RACE GROUPING” as our predictor variables. Similarly, to check for the impact on reintegration score we subset the data into male and female inmates who are currently in custody since the reintegration score is calculated every year. We check the likelihood an inmate ends up with a “LOW” which is the worst score against the odds of receiving a “MEDIUM” or “HIGH” score.
+
+
+#3.2 Model Validation
+
+```{r}
+# Model Validation for Offender Security Level - Male Prisoners
+
+# Calculating the 10-fold cross validation 
+ctrl <- trainControl(method = "repeatedcv", number = 10, savePredictions = TRUE)
+
+mod_fit.m0 <- train(OFFENDER.SECURITY.LEVEL~ RACE + RACE.GROUPING, 
+                    data=clean_data_m, method="multinom",
+                    family="binomial",
+                    trControl = ctrl,
+                    tuneLength = 5)
+
+# Predicting using the test data set 
+pred.m0 = predict(mod_fit.m0, newdata=testing.m0)
+
+# Plotting confusion matrix for the model.
+confusionMatrix(data=pred.m0, testing.m0$OFFENDER.SECURITY.LEVEL)
+
+
+```
+
+
+```{r}
+# Model Validation for Offender Security Level- Female Prisoners
+
+# Calculating 10-fold cross validation.
+ctrl <- trainControl(method = "repeatedcv", number = 10, savePredictions = TRUE)
+
+mod_fit.f0 <- train(OFFENDER.SECURITY.LEVEL~ RACE + RACE.GROUPING, 
+                    data=clean_data_f, 
+                    method="multinom", 
+                    family="binomial",
+                    trControl = ctrl, 
+                    tuneLength = 5)
+
+# Predict using test set.
+pred.f0 = predict(mod_fit.f0, newdata=testing.f0)
+
+#Creating a confusion matrix for the model
+confusionMatrix(data=pred.f0, testing.f0$OFFENDER.SECURITY.LEVEL)
+```
+
+```{r}
+## Model Validation for Reintegration Potential- Male Prisoners in Custody
+
+# Calculating 10-fold cross validation.
+ctrl <- trainControl(method = "repeatedcv", number = 10, savePredictions = TRUE)
+mod_fit.m1 <- train(REINTEGRATION.POTENTIAL ~ RACE + RACE.GROUPING, 
+                    data=clean_data_mc, 
+                    method="multinom", 
+                    family="binomial",
+                    trControl = ctrl,
+                    tuneLength = 5)
+
+#Predict using test set
+pred.m1 = predict(mod_fit.m1, newdata=testing.m1)
+
+#Creating a confusion matrix for the model
+confusionMatrix(data=pred.m1, testing.m1$REINTEGRATION.POTENTIAL)
+
+
+```
+
+
+```{r}
+# Model Validation for Reintegration Potential - Female Prisoners in Custody
+
+
+# Calculating 10-fold cross validation.
+ctrl <- trainControl(method = "repeatedcv", number = 10, savePredictions = TRUE)
+
+mod_fit.f1 <- train( REINTEGRATION.POTENTIAL ~ RACE + RACE.GROUPING,
+                     data=clean_data_fc, 
+                     method="multinom", 
+                     family="binomial",
+                     trControl = ctrl, 
+                     tuneLength = 5)
+
+# Predict using Test set
+pred.f1 = predict(mod_fit.f1, newdata=testing.f1)
+
+# Creating a confusion matrix for the model
+confusionMatrix(data=pred.f1, testing.f1$REINTEGRATION.POTENTIAL)
+
+```
+
+ We divide our data subsets into training and testing sets with 60% of the data in the training set, and use a 10-fold cross-validation analysis to find a cross-validated estimated accuracy for the different models. This means when we split our survey data into 10 groups and cross-validate 10 times using each of these subsamples as a testing set, we compute an estimated accuracy. Taking into account that we are on a log-odds scale, this value represents the total number of correct predictions made by our model over the total predictions.
+
+ For the models determining the impact of racial background on offender security level score, we get an accuracy of 0.68 for the model with male inmates and 0.69 for the model with female inmates. This suggests that the proportion of correct predictions made by our models over the total number of predictions is 0.68% and 0.69%.
+
+ For the models determining the impact of racial backgrounds on reintegration potential score, we get an accuracy of 0.49 for the model with male inmates and 0.68 for the model with female inmates. The low accuracy could be due to the fact that the classes are not separable enough given the features we have.
+
+#3.3 Final Model
+
+
+$$log(Y/(1-Y)) = B_0 + B_1R_1 + B_2R_2 + B_3I_1$$
+where:
+
+ Y is the response variable, representing the chances of an individual inmate receiving a “MAXIMUM” Offender Security level score in one model and a “LOW” Reintegration potential score in the other model. Both of these scores are the worst scores for their respective risk assessment result. $B_O$ is the intercept value in each model and $B_1$ to $B_3$ are the coefficient estimates for each corresponding predictor variable.
+
+ The predictor groups appear to be missing one category, namely, “Black” and “Indigenous” inmates. This is due to the way they were interpreted by the regression model. For each group in a predictor variable, the estimate value is computed by conditioning on a group selected by the model where this value states the difference in log odds between these two groups. Therefore, these predictor values take on a  value of 0 or a 1 depending on which group a particular prisoner is in and when all predictors are set to 0 this represents a prisoner in the conditional group. 
+
+ $R_i$ is an indicator variables belonging to the “Race” category, where we are conditioning on prisoners who are racially “Black”. $R_1$ represents prisoners belonging to “Other” races while $R_2$ corresponds to prisoners who are “White”.
+
+ Similarly, Ii is an indicator variable belonging to the “Racial Grouping” category, where we are conditioning on prisoners who identify as indigenous. As a result, $I_1$ corresponds to prisoners who identify as non-indigenous.
+
+
+#4. Results
+ 
+ The results and summary statistics for each model is displayed in tables using the kable() function from the “KableExtra” package. The tables include the predictor’s; estimate, standard error, z-value, and p-value. Utilizing these values, we can determine the strength and significance of the predictor variables of racial backgrounds on the offender security level score and reintegration potential score. The estimate value relays the change in the log-odds of inmates receiving a maximum offender security level and low reintegration potential score, given the scores received by the inmates and the standard error will tell us the expected error we will see in this estimate value. The z-value and p-value, together, tell us whether or not we can reject the null hypothesis that our estimate value is truly zero, which helps determine the significance of our predictions. To conform with a 95% confidence interval, we are looking for z-values with a magnitude greater than 1.96 or smaller than -1.96, and p-values with values smaller than 0.05. Our estimates are set up as categorical variables and not like usual continuous or count data implying that for each predictor, the estimates are conditioned on a specific response and their values indicate the difference we expect to see from this conditional response.
+
+
+```{r, echo=FALSE,warning=FALSE,message=FALSE}
+#Display summary statistics of our model for Offender Security Level
+
+broom::tidy(m0.m) %>% kable(digits = 2, caption= "Summary statistics for Offender Security Level with Male inmates")
+
+broom::tidy(f0.f) %>% kable(digits = 2, caption= "Summary statistics for Offender Security Level with Female inmates")
+```
+
+Table 1 and 2:
+
+ The tables show the results for our model predicting the likelihood of receiving an offender security level of “MAXIMUM” based on racial backgrounds. Table 1 displays the result for the model comprising of male inmates and Table 2 displays the result for the model comprising of female inmates.
+
+Race estimates: For this variable, we are conditioning on black people. In Table 1 we see that estimates are negative values which means that black males are more likely to get a maximum score compared to other races and white males. Since white males have the lowest estimate of -0.33, they have the least probability of getting a maximum score. The z-values for other races is bigger than -1.96 while its p-value is 0.05 implying that we cannot reject the null hypothesis. The z-value and p-value for white people conform to our requirements and therefore we can reject the null hypothesis.
+
+In Table 2, once again, conditioning on black females, we see that the coefficients have negative values implying that black female inmates are most likely to receive a maximum score than other races and white female inmates. Other races have the least probability of receiving the worst score with the lowest value of -10.15. P-values and z scores for the white people relay significance at 0 and -7.88 respectively but in case of other races, the values imply that we cannot reject our null hypothesis.
+
+Racial Grouping: For this variable, we condition on Indigenous people. The coefficient is positive at 0.05 in Table 1 implying that non-indigenous male inmates are more likely to get a worse score. The corresponding p-value and the z-value do not conform to our confidence interval and therefore we fail to reject the null hypothesis.
+
+For female inmates, as displayed in Table 2, the coefficient is negative implying that indigenous female inmates
+ are more likely to get a worse score. With a z value of -0.37 and high p-value of 0.71, this predictor fails to be significant.        
+
+```{r, echo=FALSE,warning=FALSE,message=FALSE}
+#Display summary statistics of our model for Reintegration Potential.
+
+broom::tidy(m1.m) %>% kable(digits = 2, caption= "Summary statistics for Reintegration potential with Male inmates")
+
+broom::tidy(f1.f) %>% kable(digits = 2, caption= "Summary statistics for Reintegration potential with Female inmates")
+```
+
+Table 3 and 4:
+
+ The tables show the results for our model predicting the likelihood of receiving a reintegration potential score of “LOW” based on racial backgrounds. Table 1 displays the result for the model comprising of male inmates in custody and Table 2 displays the result for the model comprising of female inmates in custody.
+
+Race estimates: Conditioning on black male inmates Table 3 shows that the coefficients are negative for other races and positive for white males. This means that white male inmates have a higher probability of receiving a worse score compared to black male inmates. The p-values and z-values conform to our requirements rendering our predictors statistically significant.
+
+Conditioning on black female inmates, Table 4 shows that coefficients are negative implying that black female inmates stand a higher chance of receiving the worst score while other races stand the least chance of it. The corresponding p-values and z-values, however, do not conform to our requirements and leads to us failing to reject the null hypothesis.
+
+Racial Grouping estimates: This variable conditions on indigenous people. In table 3, the coefficient is negative suggesting that indigenous male inmates have a higher probability of receiving the worst score while the z-values and p-values render this predictor statistically significant. Table 4 shows that female indigenous inmates stand a higher chance of a worse score whereby its z-values and p-values meet our requirements and we can reject the null hypothesis.
+
+
+Figure 1:Offender Security level for Male
+```{r, include= TRUE,echo= FALSE,message=FALSE,warning=FALSE}
+# Display predictor coefficients with distribution error and confidence interval 
+
+plot_summs(m0.m, plot.distributions = TRUE, inner_ci_level = .95)
+                            
+```
+
+Figure 2: Offender Security level for Female
+```{r, include= TRUE,echo= FALSE,message=FALSE,warning=FALSE}
+# Display predictor coefficients with distribution error and confidence interval
+
+plot_summs(f0.f,plot.distributions = TRUE,inner_ci_level = .95) 
+```
+
+Figure 3:Reintegration Potential for Male
+```{r, include= TRUE,echo= FALSE,message=FALSE,warning=FALSE}
+# Display predictor coefficients with distribution error and confidence interval
+
+plot_summs(m1.m, plot.distributions = TRUE, inner_ci_level = .95)
+```
+
+Figure 4: Reintegration Potential for Female
+```{r, include= TRUE ,echo= FALSE,message=FALSE,warning=FALSE}
+# Display predictor coefficients with distribution error and confidence interval
+
+plot_summs(f1.f, plot.distributions = TRUE, inner_ci_level = .95)
+           
+
+```
+
+Using the plot_summs() function from the jtools package, we plot our models. The figures provide us with a visualization of estimates, the distribution around these estimates and their 95% confidence intervals. It relays the log-odds estimates of each racial background’s likelihood of being deterministic of their risk assessment scores.
+
+#5. Discussion
+
+#Preamble
+
+ Racial discrimination is very prevalent. Canada being a developed economy, with a high number of immigrants, one would expect that there would be more racial tolerance in society. However, racial discrimination has a way of seeping into society as can be observed by this study. The article "Bias Behind Bars" by Tom Cardoso is just another example of the prevalence of racial discrimination specifically in the correctional system. In this paper, we have tried to adopt Cardoso's methodology to reproduce the article and its subsequent statistical results to the best of our ability. Although our results are slightly different than Cardoso's, there is significant evidence of racial discrimination in the prison system.
+
+#5.1. Model Discussion
+
+ In his article, Cardoso's results for Offender Security level yielded statistically significant results for Black male inmates having a higher probability of receiving the worst score of "MAXIMUM" against white male inmates, which is somewhat similar to our model results, as our model predicts the same for both, black male and female inmates.  However, we do not get any significant results against indigenous inmates from different racial backgrounds, unlike Cardoso. 
+
+ This result does not come as a surprise since the entire study is based on systematic racism. The original article mentions the fact that a Custody Rating scale, with 12 multiple choice questions is used to determine the level of security risk an inmate poses inside the system. These questions comprise of an inmate’s severity of current offence, history of alcohol or drug use, etc, and are filled out by a parole officer. In such a situation, there is ample space for an officer to project their bias while filling out the form. 
+
+ The bias within stems from history when in 1928, Canadian-born University of Chicago sociologist Ernest Burgess built a statistical tool to predict the likelihood of whether an inmate would re-offend.  Some of the variables used were "social type" that used words such as "ne'er-do-well", "drunkard" and "hobo", and an inmate's father's race. Even though the CSC has, since then, adopted a new system by conducting a suite of assessments, it does not change the fact that bias is inherent, flowing from history.
+
+ Receiving a "MAXIMUM" Offender Security level score paves way for the determination of the security level of the facility, a prisoner is to be sent. Since treatment programs and certain types of jobs are only available at specific institutions, the worst score deprives an inmate of the potential chance to reform. In a follow-up article by The Globe and Mail, "Fight against systemic racism in prison wins all-party support”, it is mentioned that Senator Murray Sinclair, who led the Truth and Reconciliation Commission and was a judge in Manitoba for more than two decades, witnessed the impact of risk assessments. He would often recommend treatments for people he had sentenced, only to be ignored after the person went through risk assessment.
+
+ Our model predicts that black and indigenous male inmates have a higher chance of receiving the worst reintegration potential score compared to male prisoners of other racial backgrounds.
+
+ The Reintegration Potential score is partly dependent on the Static Factors Assessment which focuses on an inmate's past convictions and behaviour and partly on the inmate. As per CSC regulations, a Dynamic Factors Identification and Analysis test which measure alterable aspects of an inmate's life- education, employment history, relationships, history of substance abuse, family ties, community attachments, and emotional and mental state- is used for indigenous and female inmates. Both these tests are based on the administering officer's judgement paving the way for biases to creep in. Moreover, these tests compare individuals with different backgrounds and upbringing at the same level. Someone with a less fortunate upbringing, surrounded by criminal elements, may create bias in the mind of the officer taking the test.
+
+ The Reintegration potential score becomes an important factor of consideration for parole and using history of conviction as a way of forecasting future behaviour and subsequently, the score is akin to overlooking the concept of reformation completely. If an individual happens to receive a worse offender security level score, they lose access to treatment programs or a better facility. Their potential to reform may be hampered due to this and failure to see any changes in their behaviour would subject them to a worse reintegration score. This is turn, disrupts their possibility of parole. It is basically like a vicious cycle that simply starts if the parole officer taking the test is racially biased. 
+
+ A simple example of the systematic racism has been demonstrated blatantly in the recent times, is the police brutality that led to the death of George Floyd in 2020, causing the “Black Lives Matter” movement to resurface with force. On 25th May 2020, George Floyd, a 26 year-old African-American man was arrested and restrained by the police in Minneapolis, Minnesota, for allegedly using a counterfeit bill. Despite Floyd's complaints of being unable to breathe, the arresting officer kept kneeling on him to restrain him, ultimately leading to his death.  Floyd's death triggered world-wide protests against police racism and brutality. It led to the resurgence of the "Black Lives Matter" movement on a large scale, especially in the United States.
+
+ Cardoso’s article, itself, describes the case of a prisoner “Nicholas Nootchtai” who was arrested when he was 20 years old. He narrates his experiencing recounting a series of mistakes made in his reports- documentation stating he isn’t “Indigenous” as well as similar psychological test scores consecutively three times, with several sections being repeated word for word. It clearly demonstrated how previous risk assessment scores bias the future scores as it is just easy to copy and paste information, for a system handling thousands of cases every day. 
+
+ In the follow-up article by The Globe and Mail, published on 26th October 2020, Tom Cardoso and Janice Dickson state that the Members of Parliament from all parties on a House of Commons committee supported the study for exploring systematic bias in the prison system, with  Jack Harris, the New Democratic Party’s public safety critic introducing a motion that calls for “immediate measures” to be undertaken. The study, itself, has led to a political movement towards addressing changes in the correctional system and accounting for minorities and different backgrounds while conducting risk assessments. 
+
+#5.2.Weaknesses and Next Steps
+
+ Other than the usual problem of missing data and a large number of NA values in the data, the cleaned data used for this model could not measure the severity and seriousness of crime by hand-matching the nature of the crime in the data with Uniform Crime Reporting survey offence categories, and cross-referencing with Statistics Canada's crime index weights, as we were not able to find the Statistics Canada's crime index weights. Moreover, the accuracy obtained on cross-validating our model is quite low.
+
+ The number of predictor variables used also constrained our model. Since the study is based on how racial background affects risk assessment scores, we chose only two predictor variables. However, factors like age, Static risk, which measure past involvement with the justice system, education history as well as severity of crime are potential predictors of risk assessment scores. Individuals with different racial backgrounds and upbringing coupled with their past involvement with the system as well as education level can determine their risk assessment scores since those factors may also be also subject to bias.
+
+ Even though our model discovers some statistically significant results, there is plenty of room for making our predictions stronger. A good place to start would be by adding a few more predictor variables and checking for their significance in determining risk assessment scores. There are multiple entries for a single prisoner in the data due to different charges being levied and the re-entrance of an individual into the system. Although we grouped them in our model due to the absence of severity of the crime, it would be helpful to filter out unique individuals in the same year, given all their crimes, for future work. 
+
+#Appendix 
+
+Code for this study can be found at:
+
+https://github.com/ankheepaul/finalpaper.ps5/blob/main/Scripts/appendix.rmd
+
+ 
+#References
+
+-Atmathew. (2015, August 17). Evaluating Logistic Regression Models. R. https://www.r-bloggers.com/2015/08/evaluating-logistic-regression-models/. 
+
+-Correctional Service of Canada. (2020, October 24). [Raw data used by Tom Cardoso, obtained from The Globe and Mail]. Unpublished raw data.
+
+-Cardoso, Tom. (2020, October 24). Bias behind bars: A Globe  investigation finds a prison system stacked against Black and Indigenous inmates. Retrieved December 22, 2020, from https://www.theglobeandmail.com/canada/article-investigation-racial-bias-in-canadian-prison-risk-assessments/
+
+
+-Cardoso, Tom. (2020, October 24). How we did it: How The      Globe uncovered systemic bias in prisoners' risk assessments.  Retrieved December 22, 2020, from          https://www.theglobeandmail.com/canada/article-investigation-racial-bias-in-canadian-prisons-methodology/
+
+-Cardoso, Tom & Dickson, Janice. (2020, October 26). Fight against systemic racism in prison wins all-party support. https://www.theglobeandmail.com/canada/article-committee-mps-support-push-to-study-systemic-prison-racism/. 
+
+-David Robinson, Alex Hayes and Simon Couch (2020).
+  broom: Convert Statistical Objects into Tidy Tibbles.
+  https://broom.tidymodels.org/,
+  https://github.com/tidymodels/broom.
+  
+-Hadley Wickham and Evan Miller (2020). haven: Import
+  and Export 'SPSS', 'Stata' and 'SAS' Files.
+  http://haven.tidyverse.org,
+  https://github.com/tidyverse/haven,
+  https://github.com/WizardMac/ReadStat.
+  
+-Hao Zhu (2020). kableExtra: Construct Complex Table
+  with 'kable' and Pipe Syntax.
+  http://haozhu233.github.io/kableExtra/,
+  https://github.com/haozhu233/kableExtra.
+  
+-Institute for Digital Research and and Education, Statistical Consulting. Multinomial Logistic Regression|R Data Analysis Examples. https://stats.idre.ucla.edu/r/dae/multinomial-logistic-regression/. 
+  
+-JJ Allaire, Jeffrey Horner, Yihui Xie, Vicent Marti and
+  Natacha Porte (2019). markdown: Render Markdown with
+  the C Library 'Sundown'. R package version 1.1.
+  https://github.com/rstudio/markdown
+  
+-Lionel Henry, Hadley Wickham and Winston Chang (2020).
+  ggstance: Horizontal 'ggplot2' Components. R package
+  version 0.3.4.
+  
+-Long JA (2020). _jtools: Analysis and Presentation of
+Social Scientific Data_. R package version 2.1.0, <URL:
+https://cran.r-project.org/package=jtools>.
+
+-Max Kuhn (2020). caret: Classification and Regression
+  Training. R package version 6.0-86.
+  https://github.com/topepo/caret/
+  
+-O'Malley, Katie. (2020, June 25). How Anti-Racism Protests Have Changed The World In Less Than A Month. https://www.elle.com/uk/life-and-culture/culture/a32822672/black-lives-matter-protests-achievements-statues-police-reform/. 
+
+
+-R Core Team (2020). R: A language and environment for statistical computing. R
+  Foundation for Statistical Computing, Vienna, Austria. URL
+  https://www.R-project.org/.
+  
+-Venables, W. N. & Ripley, B. D. (2002) Modern Applied
+  Statistics with S. Fourth Edition. Springer, New York.
+  ISBN 0-387-95457-0  
+  
+-Wickham et al., (2019). Welcome to the tidyverse.
+  Journal of Open Source Software, 4(43), 1686,
+  https://doi.org/10.21105/joss.01686
+  
+
+
+  
+
+
+
+
+
+ 
+
+  
+
+  
+
+
+
