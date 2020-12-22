@@ -16,6 +16,6 @@ Outputs contain data that has been modified from the input data, the report and 
 
 Scripts contain R scripts that take inputs and outputs and produce outputs. These are:
 
-- data_cleaning.R code to clean the CSC data set
+- data_cleaning.R code to clean the CSC data set used by The Globe and Mail
 
 - appendix.rmd code for the entire paper
