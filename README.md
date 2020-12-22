@@ -1,4 +1,4 @@
-Overview
+# Overview
 
 This repository contains code and the report for the statistical study undertaken in an attempt to reproduce Tom Cardoso's "Bias behind Bars" - article published in The Globe and Mail, to discover racial discrimination against black and indigenous people in the Canadian  judical system. It was created by Ankhee Paul. The purpose of this is to create a report that summarises the results of a statistial model that was built. Our results indicate that black inmates have a higher probability of receiving the worst offender security level scores compared to white prisoners whereas black and indigenous male prisoners have a higher probability of receiving the worst reintegration potential score compared to other male prisoners of other racial backgrounds. The data that was used for anaylsis cannot be shared publicly. Details on how to obtain this data is provided below. The sections of this repository are: inputs, outputs, scripts.
 
