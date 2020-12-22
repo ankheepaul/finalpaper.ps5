@@ -1,0 +1,598 @@
+---
+title: "STA304PS5.CODEAPPENDIX"
+output: pdf_document
+ 
+---
+
+
+Preamble: This code begins by taking the raw data provided by The Globe and Mail from the database of Correctional Services Of Canada, and organizing the details of inmates into organized groups that can better analyzed. Once these groups have been created, their proportions with respect to different factors have been displayed using a series of bar graphs. The code then runs four multinomial logistic regression models on the organized data and the validity and results of each model is analyzed. Lastly, we display the summary statistics obtained from each model in tables as well as graph them for proper visualization.  
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r setup, include=FALSE,echo = FALSE}
+
+#basic workspace setup
+
+library(broom)
+library(jtools)
+library(nnet)
+library(ggstance)
+library(kableExtra)
+library(caret)
+library(tidyverse)
+library(haven)
+```
+
+##1.Data Cleaning
+```{r, include =FALSE, Echo= FALSE}
+#set working directory
+setwd("~/Desktop/ps5/The_Globe_and_Mail_CSC_OMS_2012-2018_20201022235635")
+
+```
+
+```{r}
+
+#read the data set and store it in the variable raw_data
+raw_data<-read.csv("The_Globe_and_Mail_CSC_OMS_2012-2018_20201022235635.csv",na.strings=c(""))
+
+
+
+```
+
+
+
+```{r}
+
+# Rename the data and select the variables of interest.
+select_data <- 
+  raw_data%>%
+  select(FISCAL.YEAR,
+         AGE,
+         GENDER,
+         RACE,
+         RACE.GROUPING,
+         IN.CUSTODY.COMMUNITY,
+         SUPERVISION.TYPE,
+         JURISDICTION,
+         SENTENCE.TYPE,
+         AGGREGATE.SENTENCE.LENGTH,
+         INSTUTUTIONAL.SECURITY.LEVEL,
+         OFFENDER.SECURITY.LEVEL,
+         STATIC.RISK,
+         REINTEGRATION.POTENTIAL,
+         RELIGION,
+         OFFENCE.DESCRIPTION,
+         OFFENDER.NUMBER)
+
+# Rename the data and remove rows with missing values.
+clean_data<-select_data %>% na.omit()
+
+# Reselect the data and filter out individual's who went to federal prison.
+clean_data<-
+  select_data%>%
+  #filtering out individuals who went to federal prison.
+  filter(JURISDICTION %in% c("FEDERAL"))%>%
+  na.omit()
+
+
+clean_data <-
+  # Reselect data and group all individual races other than 'Black' and 'White' 
+  # into 'Other' category.
+  select_data %>%
+  mutate(RACE= case_when(RACE == "Black" ~ "Black",
+                         RACE == "White" ~ "White",
+                         RACE != "Black" || RACE != "White" ~"Other"))%>%
+  # Merge rows together based on 'OFFENDER NUMBER' to group multiple entries 
+  # for the same individual.
+  group_by(OFFENDER.NUMBER)%>%
+  # Remove missing values in the data.
+  na.omit()
+
+
+  
+                   
+```
+
+##2.Data
+
+##2.2 Display of Data
+```{r}
+# A bar plot displaying the prisoners by their gender
+clean_data %>% 
+  ggplot(aes(x = GENDER)) + 
+  geom_bar(colour="black", fill = 'blue') + 
+  labs(title = "Graph 1: Gender Distribution of Prisoners", 
+       x = "Gender",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+```
+
+
+```{r}
+# A bar plot displaying the prisoners by their gender
+clean_data %>% 
+  ggplot(aes(x = GENDER)) + 
+  geom_bar(colour="black", fill = 'blue') + 
+  labs(title = "Graph 1: Gender Distribution of Prisoners", 
+       x = "Gender",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+
+```
+
+```{r}
+# A bar plot displaying the age distribution of the prisoners
+clean_data %>% 
+  ggplot(aes(x = AGE)) + 
+  geom_bar(colour="black", fill = 'green') + 
+  labs(title = "Graph 2: Age Distribution of Prisoners", 
+       x = "Age of Prisoners",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+
+```
+
+
+```{r}
+# A bar plot displaying the races of the prisoners
+clean_data %>% 
+  ggplot(aes(x = RACE, fill = RACE.GROUPING,
+             label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") + 
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3)+
+ 
+  labs(title = "Graph 3: Race Distribution of Prisoners", 
+       x = "Race of the prisoners",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+
+```
+
+```{r}
+# A bar plot displaying whether the prisoner is in custody or on parole based on Race.
+clean_data %>% 
+  ggplot(aes(x = IN.CUSTODY.COMMUNITY, fill=RACE,
+         label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) + 
+  labs(title = "Graph 4: Distribution of Prisoners based on whether they are in custody", 
+       x = "IN CUSTODY/ COMMUNITY",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+
+```
+
+
+```{r}
+# A bar plot displaying whether the prisoner is in custody or on parole based on         whether they are indigenous or non-indigenous.
+clean_data %>% 
+  ggplot(aes(x = IN.CUSTODY.COMMUNITY, fill=RACE.GROUPING,
+         label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) + 
+  labs(title = "Graph 5:Distribution of Prisoners based on whether they are in custody", 
+       x = "IN CUSTODY/ COMMUNITY",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+```
+
+```{r}
+# A bar plot displaying the kind of sentence the prisoner has received based on Race.
+clean_data %>% 
+  ggplot(aes(x = SENTENCE.TYPE, fill=RACE,
+         label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) + 
+  labs(title = "Graph 6: Distribution of Prisoners by Sentence Type", 
+       x = "Type of Sentence",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+```
+
+```{r}
+
+# A bar plot displaying the kind of sentence the prisoner has received based on 
+# whether they are indigenous or non-indigenous.
+clean_data %>% 
+  ggplot(aes(x = SENTENCE.TYPE, fill=RACE.GROUPING,
+         label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) + 
+  labs(title = "Graph 7: Distribution of Prisoners by Sentence Type", 
+       x = "Type of Sentence",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+
+```
+
+```{r}
+
+# A bar plot displaying the 'Offender Security Level' score given to the prisoner
+# based on Race.
+clean_data %>% 
+  ggplot(aes(x = OFFENDER.SECURITY.LEVEL, fill=RACE,
+         label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) + 
+  labs(title = "Graph 8: Distribution of Prisoners by Offender Security level", 
+       x = " Security level",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+```
+
+```{r}
+# A bar plot displaying the 'Offender Security Level' score given to the prisoner
+# based on whether they are indigenous or non-indigenous.
+clean_data %>% 
+  ggplot(aes(x = OFFENDER.SECURITY.LEVEL, fill=RACE.GROUPING,
+         label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) + 
+  labs(title = "Graph 9: Distribution of Prisoners by Offender Security level", 
+       x = " Security level",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+```
+
+```{r}
+# A bar plot displaying the 'Reintegration Potential' score given to the prisoner
+# based on Race.
+clean_data %>% 
+  ggplot(aes(x = REINTEGRATION.POTENTIAL, fill=RACE,
+         label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) + 
+  labs(title = "Graph 10: Distribution of Prisoners by Reintegration potential", 
+       x = " Reintegration Potential",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+```
+
+```{r}
+
+# A bar plot displaying the 'Reintegration Potential' score given to the prisoner
+# based on whether they are indigenous or non indigenous.
+clean_data %>% 
+  ggplot(aes(x = REINTEGRATION.POTENTIAL, fill=RACE.GROUPING,
+         label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) + 
+  labs(title = "Graph 11: Distribution of Prisoners by Reintegration potential", 
+       x = " Reintegration Potential",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+```
+
+```{r}
+# A bar plot displaying security level of the facility given to the prisoner
+# based on Race.
+clean_data %>% 
+  ggplot(aes(x = INSTUTUTIONAL.SECURITY.LEVEL, fill=RACE.GROUPING,
+         label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) + 
+  labs(title = "Graph 12: Distribution of Prisoners by Institutional Security level", 
+       x = " Security level",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+```
+```{r}
+# A bar plot displaying security level of the facility given to the prisoner
+# based on whether they are indigenous or non-indigenous.
+clean_data %>% 
+  ggplot(aes(x = INSTUTUTIONAL.SECURITY.LEVEL, fill=RACE,
+         label = scales::percent(prop.table(stat(count))))) + 
+                                   geom_bar(position = "dodge") +
+  geom_text(stat = 'count',
+              position = position_dodge(.9), 
+              vjust = -0.5, 
+              size = 3) + 
+  labs(title = "Graph 13: Distribution of Prisoners by Institutional Security level", 
+       x = " Security level",
+       y = "Number of Prisoners"
+       ) + 
+  theme_minimal()
+```
+##3.Model
+##3.1 Regression Models
+##3.1.1. Logistic Regression for Offender Security level 
+
+
+```{r}
+## Logistic Regression Model for Male
+
+#Create a subset of the data by selecting only male prisoners and remove missing values.
+clean_data_m <- subset(clean_data, GENDER== "MALE") %>%na.omit()
+
+#Creating the Training and Testing data set
+set.seed(1111)
+Train.m0 <- createDataPartition(clean_data_m$OFFENDER.SECURITY.LEVEL,
+                                p=0.6, 
+                                list=FALSE)
+
+# Dividing the data into Train and Test data sets.
+training.m0<- clean_data_m[ Train.m0, ]
+testing.m0<- clean_data_m[ -Train.m0, ]
+```
+
+
+```{r}
+
+# Logistic regression  model for Offender Security Level for Male inmates.
+m0.m <- multinom(as.numeric(OFFENDER.SECURITY.LEVEL=="MAXIMUM")~RACE+RACE.GROUPING,
+                 family=binomial(link='logit'),
+                 data=training.m0)
+
+```
+
+
+
+
+
+```{r}
+## Logistic Regression for Security Level for Female Prisoners
+
+
+#Create a subset of the data by selecting only female prisoners and remove missing values.
+clean_data_f <- subset(clean_data, GENDER== "FEMALE") %>%na.omit()
+
+#Creating the Training and Testing data set
+set.seed(2222)
+Train.f0<- createDataPartition(clean_data_f$OFFENDER.SECURITY.LEVEL, 
+                               p=0.6, 
+                               list=FALSE)
+
+#Dividing data into Train and Test data sets.
+training.f0<- clean_data_f[ Train.f0, ]
+testing.f0<- clean_data_f[ -Train.f0, ]
+```
+
+
+```{r}
+
+# Logistic regression for Offender security level
+f0.f <- multinom(as.numeric(OFFENDER.SECURITY.LEVEL=="MAXIMUM")~RACE+RACE.GROUPING,
+                 family=binomial(link='logit'),
+                 data=training.f0)
+
+```
+
+##3.1.2 Logistic Regression for Reintegration score 
+
+
+```{r}
+
+## Logistic Regression Model Reingration Score  for Male inmates.
+
+#Creating subset of the data by selecting only male prisoners in custody and
+# removing missing values.
+clean_data_mc<- subset(clean_data, GENDER== "MALE" & IN.CUSTODY.COMMUNITY== "In Custody") %>%
+  na.omit()
+
+#Creating the Training and Testing data set
+set.seed(3333)
+Train.m1 <- createDataPartition(clean_data_mc$REINTEGRATION.POTENTIAL,
+                                p=0.6, 
+                                list=FALSE)
+
+#Dividing the data into Train and Test data sets.
+training.m1<- clean_data_mc[ Train.m1, ]
+testing.m1<- clean_data_mc[ -Train.m1, ]
+
+```
+
+
+
+```{r}
+# Logistic regression model for reintegration score
+m1.m <- multinom(as.numeric(REINTEGRATION.POTENTIAL=="LOW")~RACE+RACE.GROUPING,
+                 family=binomial(link='logit'),
+                 data=training.m1)
+
+
+
+```
+
+
+
+```{r}
+## Logistic Regression Model for Reintegration Potential for Female Prisoners in Custody
+
+#Creating subset of the data by selecting only female prisoners in custody
+clean_data_fc<- subset(clean_data, GENDER== "FEMALE" & IN.CUSTODY.COMMUNITY== "In Custody") %>% na.omit()
+
+#Creating the Training and Testing data set
+set.seed(4444)
+Train.f1 <- createDataPartition(clean_data_fc$REINTEGRATION.POTENTIAL,
+                                p=0.6, 
+                                list=FALSE)
+
+#Divding data into Train and Test set
+training.f1<- clean_data_fc[ Train.f1, ]
+testing.f1<- clean_data_fc[ -Train.f1, ]
+
+```
+
+
+
+```{r}
+# Logistic regression for reintegration score
+f1.f <- multinom(as.numeric(REINTEGRATION.POTENTIAL=="LOW")~RACE+RACE.GROUPING,
+                 family=binomial(link='logit'),
+                 data=training.f1)
+
+
+
+```
+
+#3.2. Model Validation
+```{r}
+# Model Validation for Offender Security Level - Male Prisoners
+
+# Calculating the 10-fold cross validation 
+ctrl <- trainControl(method = "repeatedcv", number = 10, savePredictions = TRUE)
+
+mod_fit.m0 <- train(OFFENDER.SECURITY.LEVEL~ RACE + RACE.GROUPING, 
+                    data=clean_data_m, method="multinom",
+                    family="binomial",
+                    trControl = ctrl,
+                    tuneLength = 5)
+
+# Predicting using the test data set 
+pred.m0 = predict(mod_fit.m0, newdata=testing.m0)
+
+# Plotting confusion matrix for the model.
+confusionMatrix(data=pred.m0, testing.m0$OFFENDER.SECURITY.LEVEL)
+
+
+```
+
+
+```{r}
+# Model Validation for Offender Security Level- Female Prisoners
+
+# Calculating 10-fold cross validation.
+ctrl <- trainControl(method = "repeatedcv", number = 10, savePredictions = TRUE)
+
+mod_fit.f0 <- train(OFFENDER.SECURITY.LEVEL~ RACE + RACE.GROUPING, 
+                    data=clean_data_f, 
+                    method="multinom", 
+                    family="binomial",
+                    trControl = ctrl, 
+                    tuneLength = 5)
+
+# Predict using test set.
+pred.f0 = predict(mod_fit.f0, newdata=testing.f0)
+
+#Creating a confusion matrix for the model
+confusionMatrix(data=pred.f0, testing.f0$OFFENDER.SECURITY.LEVEL)
+```
+
+```{r}
+## Model Validation for Reintegration Potential- Male Prisoners in Custody
+
+# Calculating 10-fold cross validation.
+ctrl <- trainControl(method = "repeatedcv", number = 10, savePredictions = TRUE)
+mod_fit.m1 <- train(REINTEGRATION.POTENTIAL ~ RACE + RACE.GROUPING, 
+                    data=clean_data_mc, 
+                    method="multinom", 
+                    family="binomial",
+                    trControl = ctrl,
+                    tuneLength = 5)
+
+#Predict using test set
+pred.m1 = predict(mod_fit.m1, newdata=testing.m1)
+
+#Creating a confusion matrix for the model
+confusionMatrix(data=pred.m1, testing.m1$REINTEGRATION.POTENTIAL)
+
+
+```
+
+
+```{r}
+# Model Validation for Reintegration Potential - Female Prisoners in Custody
+
+
+# Calculating 10-fold cross validation.
+ctrl <- trainControl(method = "repeatedcv", number = 10, savePredictions = TRUE)
+
+mod_fit.f1 <- train( REINTEGRATION.POTENTIAL ~ RACE + RACE.GROUPING,
+                     data=clean_data_fc, 
+                     method="multinom", 
+                     family="binomial",
+                     trControl = ctrl, 
+                     tuneLength = 5)
+
+# Predict using Test set
+pred.f1 = predict(mod_fit.f1, newdata=testing.f1)
+
+# Creating a confusion matrix for the model
+confusionMatrix(data=pred.f1, testing.f1$REINTEGRATION.POTENTIAL)
+
+```
+
+##4. Results
+
+```{r}
+#Display summary statistics of our models
+
+broom::tidy(m0.m) %>% kable(digits = 2, caption= "Table 1: Summary statistics for Offender Security Level with Male inmates")
+
+broom::tidy(f0.f) %>% kable(digits = 2, caption= "Table 2: Summary statistics for Offender Security Level with Female inmates")
+
+broom::tidy(m1.m) %>% kable(digits = 2, caption= "Table 3: Summary statistics for Reintegration potential with Male inmates")
+
+broom::tidy(f1.f) %>% kable(digits = 2, caption= "Table 4: Summary statistics for Reintegration potential with Female inmates")
+```
+
+
+
+```{r}
+
+# Display predictor coefficients with distribution error and confidence interval 
+
+plot_summs(m0.m, 
+           plot.distributions = TRUE, 
+           inner_ci_level = .95)
+                            
+
+plot_summs(f0.f, plot.distributions = TRUE, inner_ci_level = .95, 
+           model.names= "Figure 2: Offender Security level for Female")
+
+plot_summs(m1.m,
+           plot.distributions = TRUE, 
+           inner_ci_level = .95)
+
+plot_summs(f1.f, plot.distributions = TRUE, inner_ci_level = .95,
+           model.names= "Figure 4: Reintegration Potential for Female")
+
+```
+
+
+
